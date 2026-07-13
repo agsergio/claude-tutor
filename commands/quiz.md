@@ -1,6 +1,6 @@
 ---
 description: Quiz yourself on a topic from your learning plan with adaptive difficulty and mixed question formats
-argument-hint: [topic] [--module N] [--count N]
+argument-hint: "[topic] [--module N] [--count N]"
 allowed-tools: AskUserQuestion, Read, Write, Bash(mkdir *)
 ---
 
