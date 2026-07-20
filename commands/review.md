@@ -1,6 +1,6 @@
 ---
 description: View your learning progress — quiz scores, weak areas, and what to study next
-argument-hint: [topic]
+argument-hint: "[topic]"
 allowed-tools: Read
 ---
 
