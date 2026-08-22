@@ -336,13 +336,34 @@ async function renderPlan(slug) {
     html += '<h2>Modules</h2>';
     for (const [i, mod] of (plan.modules || []).entries()) {
       const concepts = (mod.keyConcepts || []).map(c => `<span class="concept-tag">${c}</span>`).join('');
-      const resources = (mod.resources || []).map(r =>
-        `<div class="resource-item">
+      const resources = (mod.resources || []).map(r => {
+        // Book metadata (author/edition/sections) is optional — only shown when present
+        const byline = [r.author, r.edition ? `${r.edition} ed.` : ''].filter(Boolean).join(', ');
+        return `<div class="resource-item">
           <span class="resource-type">${r.type || 'link'}</span>
           <a href="${r.url}" target="_blank">${r.title}</a>
+          ${byline ? `<span class="text-sm text-secondary">${byline}</span>` : ''}
+          ${r.sections ? `<span class="text-sm text-muted">${r.sections}</span>` : ''}
           ${r.free === false ? badge('paid', 'yellow') : ''}
-        </div>`
-      ).join('');
+        </div>`;
+      }).join('');
+
+      // Labs are optional and absent from older plans — an empty list renders nothing at all
+      const labs = (mod.labs || []).map(l => {
+        // A lab without a verified URL renders as plain text, never a dead anchor
+        const name = l.url ? `<a href="${l.url}" target="_blank">${l.title}</a>` : `<span>${l.title}</span>`;
+        // vendor/cloud setups carry real friction (entitlement, waitlist, spend) — flag them
+        const setupColor = (l.setup === 'vendor' || l.setup === 'cloud') ? 'yellow' : 'green';
+        return `<div class="resource-item" style="flex-wrap:wrap">
+          ${l.platform ? `<span class="resource-type">${l.platform}</span>` : ''}
+          ${name}
+          ${l.setup ? badge(l.setup, setupColor) : ''}
+          ${l.cost && l.cost !== 'free' ? badge(l.cost, 'yellow') : ''}
+          ${l.estimatedTime ? `<span class="text-sm text-muted">${l.estimatedTime}</span>` : ''}
+          ${l.prerequisites?.length ? `<div class="text-sm text-muted" style="flex-basis:100%">Needs: ${l.prerequisites.join(', ')}</div>` : ''}
+          ${l.verify ? `<div class="text-sm text-secondary" style="flex-basis:100%">Verify: ${l.verify}</div>` : ''}
+        </div>`;
+      }).join('');
 
       html += `<div class="module-card" data-module="${i}">
         <div class="module-header">
@@ -359,6 +380,7 @@ async function renderPlan(slug) {
         <div class="module-body">
           ${mod.objectives ? `<h3>Objectives</h3><ul>${mod.objectives.map(o => `<li class="text-secondary text-sm">${o}</li>`).join('')}</ul>` : ''}
           ${concepts ? `<h3 class="mt-16">Key Concepts</h3><div>${concepts}</div>` : ''}
+          ${labs ? `<h3 class="mt-16">Labs</h3><div>${labs}</div>` : ''}
           ${resources ? `<h3 class="mt-16">Resources</h3><div>${resources}</div>` : ''}
           <div class="mt-16"><a href="#/teach/${slug}/${mod.id}" class="btn btn-sm btn-primary">Learn This Module</a></div>
         </div>
