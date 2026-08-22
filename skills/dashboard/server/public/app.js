@@ -28,8 +28,9 @@ const app = document.getElementById('app');
 
 function route() {
   const hash = location.hash.slice(1) || '/';
-  const [path] = hash.split('?');
+  const [path, query] = hash.split('?');
   const parts = path.split('/').filter(Boolean);
+  const params = new URLSearchParams(query || '');
 
   // Update nav active state
   const routePath = '/' + parts.join('/');
@@ -42,7 +43,7 @@ function route() {
   if (parts[0] === 'progress' && parts[1]) return renderProgress(parts[1]);
   if (parts[0] === 'quiz' && parts[1]) return renderQuiz(parts[1]);
   if (parts[0] === 'quiz') return renderQuiz();
-  if (parts[0] === 'create') return renderCreate();
+  if (parts[0] === 'create') return renderCreate({ topic: params.get('topic'), goal: params.get('goal') });
   if (parts[0] === 'diagnostic' && parts[1]) return renderDiagnostic(parts[1]);
   if (parts[0] === 'teach' && parts[1] && parts[2]) return renderTeach(parts[1], parts[2]);
   if (parts[0] === 'calendar') return renderCalendar();
@@ -78,6 +79,12 @@ function scoreColor(score) {
 
 function badge(text, color) {
   return `<span class="badge badge-${color}">${text}</span>`;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
 }
 
 function confirm(msg, onYes) {
@@ -212,16 +219,90 @@ function normalizeProgress(p) {
   return p;
 }
 
+// --- Market Priorities (external skill signal) ---
+
+const STAGE_COLORS = {
+  'job-ready': 'green',
+  'lab-done': 'blue',
+  'studying': 'yellow',
+  'not-started': 'red',
+};
+
+function renderSkillSignal(signal) {
+  // Empty / unconfigured / broken feed => no panel at all.
+  if (!signal || !Array.isArray(signal.studyNext) || signal.studyNext.length === 0) return '';
+
+  const norm = s => String(s || '').trim().toLowerCase();
+  const jobReady = new Set((signal.jobReady || []).map(norm));
+  const rising = new Map((signal.rising || []).map(r => [norm(r.skill), r]));
+
+  let stale = '';
+  if (signal.date) {
+    const days = Math.floor((Date.now() - new Date(signal.date + 'T00:00:00').getTime()) / 86400000);
+    if (Number.isFinite(days) && days > 14) stale = ` ${badge('stale', 'yellow')}`;
+  }
+
+  let html = '<div class="card" style="margin-bottom:24px">';
+  html += `<div class="card-header"><div class="card-title">Market priorities</div>`;
+  html += `<span class="text-sm text-muted">${signal.date ? 'Signal: ' + esc(signal.date) : 'External signal'}${stale}</span></div>`;
+  html += '<div style="overflow-x:auto"><table class="table"><thead><tr>'
+    + '<th>Rank</th><th>Skill</th><th>Seen in</th><th>Stage</th><th>Gap</th><th>Next action</th><th></th>'
+    + '</tr></thead><tbody>';
+
+  for (const row of signal.studyNext) {
+    const move = rising.get(norm(row.skill));
+    let arrow = '';
+    if (move && move.direction && move.delta != null) {
+      const up = move.direction === 'up';
+      arrow = ` <span class="text-sm" style="color:var(${up ? '--success' : '--error'})" title="${up ? 'up' : 'down'} ${move.delta} from #${move.prevRank}">${up ? '↑' : '↓'}${move.delta}</span>`;
+    }
+
+    const stage = row.stage || '--';
+    const stageBadge = row.stage ? badge(esc(stage), STAGE_COLORS[norm(stage)] || 'blue') : '<span class="text-muted">--</span>';
+    const isJobReady = jobReady.has(norm(row.skill)) || norm(stage) === 'job-ready';
+
+    let action = '';
+    if (!isJobReady) {
+      const q = `topic=${encodeURIComponent(row.skill)}`
+        + (row.nextAction ? `&goal=${encodeURIComponent(row.nextAction)}` : '');
+      action = `<a href="#/create?${q}" class="btn btn-sm btn-primary">Create plan</a>`;
+    }
+
+    html += `<tr>
+      <td class="text-mono">${row.rank != null ? '#' + row.rank : '--'}${arrow}</td>
+      <td>${esc(row.skill)}</td>
+      <td class="text-mono">${row.freq != null ? row.freq : '--'}</td>
+      <td>${stageBadge}</td>
+      <td class="text-mono">${row.gap != null ? row.gap : '--'}</td>
+      <td class="text-secondary">${row.nextAction ? esc(row.nextAction) : '<span class="text-muted">--</span>'}</td>
+      <td>${action}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+
+  if (signal.rising && signal.rising.length > 0) {
+    const items = signal.rising.map(r => {
+      const m = (r.direction && r.delta != null) ? ` (${r.direction} ${r.delta})` : '';
+      return `${esc(r.skill)}${r.rank != null ? ' #' + r.rank : ''}${m}`;
+    }).join(' &middot; ');
+    html += `<div class="card-meta text-muted" style="margin-top:12px"><strong>Rising:</strong> ${items}</div>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
 // --- Dashboard View ---
 
 async function renderDashboard() {
   app.innerHTML = '<h1>Loading...</h1>';
   try {
-    const [stats, index, calendar, recs] = await Promise.all([
+    const [stats, index, calendar, recs, signal] = await Promise.all([
       api.get('/stats'),
       api.get('/topics'),
       api.get('/calendar'),
       api.get('/recommendations').catch(() => []),
+      api.get('/skill-signal').catch(() => null),
     ]);
 
     const topics = Object.entries(index.topics || {});
@@ -254,6 +335,9 @@ async function renderDashboard() {
       };
       html += `<div class="card" style="border-color:var(--accent);margin-bottom:24px"><div class="flex gap-8" style="justify-content:space-between"><div><h3 style="color:var(--accent);margin-bottom:4px">Suggested Next Step</h3><span class="text-secondary">${rec.message}</span></div>${recActions[rec.type] || ''}</div></div>`;
     }
+
+    // Market priorities (external skill signal — optional, read-only)
+    html += renderSkillSignal(signal);
 
     // Topics
     if (topics.length === 0) {
@@ -677,8 +761,9 @@ async function renderProfile() {
 
 // --- Create Topic View ---
 
-async function renderCreate() {
+async function renderCreate(prefill) {
   const profile = await api.get('/profile').catch(() => ({}));
+  prefill = prefill || {};
 
   let html = '<h1>Create Learning Plan</h1>';
   html += `<div class="card" style="max-width:600px" id="create-form">
@@ -708,6 +793,10 @@ async function renderCreate() {
   </div>`;
 
   app.innerHTML = html;
+
+  // Deep-link prefill (e.g. from the Market priorities panel)
+  if (prefill.topic) document.getElementById('c-topic').value = prefill.topic;
+  if (prefill.goal) document.getElementById('c-goal').value = prefill.goal;
 
   document.getElementById('c-submit').addEventListener('click', async () => {
     const topic = document.getElementById('c-topic').value.trim();

@@ -106,6 +106,53 @@ The dashboard and CLI share the same data. Switch between them freely.
 <img src="assets/screenshot-calendar.png" alt="Review calendar view" width="720">
 </details>
 
+### Optional: external study signal
+
+The dashboard's recommendations are self-referential — they only know what you've
+already studied. If you have an external tool that ranks skills by some outside
+measure (job-market demand, a team skills matrix, a certification blueprint), you
+can surface that ranking as a **Market priorities** panel on the Overview.
+
+Point the `CLAUDE_TUTOR_SKILL_SIGNAL` env var at a markdown file:
+
+```bash
+CLAUDE_TUTOR_SKILL_SIGNAL=/path/to/skill-signal.md node skills/dashboard/server/index.js
+```
+
+The file is expected to look like this — every section and every column is
+optional:
+
+```markdown
+# Skill signal — 2026-08-21
+
+## Study next
+
+| # | Skill | Market rank | Seen in | Stage | Gap | Next action |
+|---|---|---|---|---|---|---|
+| 1 | Service Mesh | #8 | 20 postings | studying | 0.3649 | sandbox demo lab |
+| 2 | Python | #2 | 43 postings | studying | 0.4904 | — |
+
+## Rising in the market
+
+- **Edge Compute** #15 (up 3 from #18) · stage: not-started
+
+## Already job-ready — do not re-plan
+
+Version Control, Caching / CDN, Unit Testing
+```
+
+- `—` in any cell means "no value".
+- Each row gets a **Create plan** button that deep-links to the create form
+  prefilled with the skill and its next action. Skills listed under
+  *Already job-ready* get no button.
+- **This integration is read-only.** claude-tutor parses the file and never
+  writes to it. Passing a quiz is not the same claim as being able to do
+  something on the job, so your source stays the authority on skill levels.
+
+Leave the variable unset (the default) and the panel never renders. If the file
+is missing or its format changes, the panel is hidden and a note is logged — the
+dashboard keeps working either way.
+
 ## Commands
 
 | Command | Description | Example |
