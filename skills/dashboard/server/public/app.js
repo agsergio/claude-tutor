@@ -47,12 +47,14 @@ function route() {
   if (parts[0] === 'diagnostic' && parts[1]) return renderDiagnostic(parts[1]);
   if (parts[0] === 'teach' && parts[1] && parts[2]) return renderTeach(parts[1], parts[2]);
   if (parts[0] === 'calendar') return renderCalendar();
+  if (parts[0] === 'market-priorities') return renderMarketPriorities();
   if (parts[0] === 'profile') return renderProfile();
   return renderDashboard();
 }
 
 window.addEventListener('hashchange', route);
 window.addEventListener('load', route);
+window.addEventListener('load', () => initMarketNav());
 
 // --- Helpers ---
 
@@ -292,17 +294,64 @@ function renderSkillSignal(signal) {
   return html;
 }
 
+// --- Market Priorities View ---
+
+// Cached so the nav probe and the first navigation share one request.
+let _skillSignal;
+
+async function getSkillSignal() {
+  if (_skillSignal === undefined) {
+    _skillSignal = await api.get('/skill-signal').catch(() => null);
+  }
+  return _skillSignal;
+}
+
+// The nav entry stays hidden unless an external signal is actually configured,
+// so the feature is invisible for anyone without CLAUDE_TUTOR_SKILL_SIGNAL set.
+async function initMarketNav() {
+  const signal = await getSkillSignal();
+  if (!signal || !Array.isArray(signal.studyNext) || signal.studyNext.length === 0) return;
+  const li = document.getElementById('nav-market');
+  if (li) li.hidden = false;
+}
+
+async function renderMarketPriorities() {
+  app.innerHTML = '<h1>Loading market priorities...</h1>';
+  try {
+    const signal = await getSkillSignal();
+    const panel = renderSkillSignal(signal);
+
+    // Reachable directly by bookmark or typed URL even when unconfigured —
+    // explain the feature rather than showing a blank page.
+    if (!panel) {
+      app.innerHTML = `<h1>Market priorities</h1>
+        <div class="card">
+          <p class="text-secondary">No external study signal is configured.</p>
+          <p class="text-secondary">This page shows a skill ranking produced by an outside tool —
+          job-market demand, a team skills matrix, a certification blueprint — so study
+          recommendations aren't limited to what you've already studied here.</p>
+          <p class="text-secondary">Point <code>CLAUDE_TUTOR_SKILL_SIGNAL</code> at a markdown
+          ranking and restart the dashboard. See the README for the expected format.</p>
+        </div>`;
+      return;
+    }
+
+    app.innerHTML = `<h1>Market priorities</h1>${panel}`;
+  } catch (e) {
+    app.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
 // --- Dashboard View ---
 
 async function renderDashboard() {
   app.innerHTML = '<h1>Loading...</h1>';
   try {
-    const [stats, index, calendar, recs, signal] = await Promise.all([
+    const [stats, index, calendar, recs] = await Promise.all([
       api.get('/stats'),
       api.get('/topics'),
       api.get('/calendar'),
       api.get('/recommendations').catch(() => []),
-      api.get('/skill-signal').catch(() => null),
     ]);
 
     const topics = Object.entries(index.topics || {});
@@ -336,8 +385,6 @@ async function renderDashboard() {
       html += `<div class="card" style="border-color:var(--accent);margin-bottom:24px"><div class="flex gap-8" style="justify-content:space-between"><div><h3 style="color:var(--accent);margin-bottom:4px">Suggested Next Step</h3><span class="text-secondary">${rec.message}</span></div>${recActions[rec.type] || ''}</div></div>`;
     }
 
-    // Market priorities (external skill signal — optional, read-only)
-    html += renderSkillSignal(signal);
 
     // Topics
     if (topics.length === 0) {
