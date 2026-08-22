@@ -1,47 +1,11 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { validatePlan, validateProgress, updateSM2, computeWeakStrong, getModuleScores, toSlug } = require('./validate');
+const { validatePlan, validateProgress, updateSM2, computeWeakStrong, getModuleScores, toSlug } = require('../../../lib/validate');
+const { LEARNING_DIR, readJson, writeJson, getIndex, findPlanFile } = require('../../../lib/store');
 const { sendEvent, initSSE, streamClaude, extractJSON } = require('./sse');
 
 const router = express.Router();
-const LEARNING_DIR = path.join(process.env.HOME, '.claude', 'learning');
-
-// --- Helpers ---
-
-function readJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function writeJson(filePath, data) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, filePath);
-}
-
-function getIndex() {
-  return readJson(path.join(LEARNING_DIR, 'index.json')) || { topics: {} };
-}
-
-function findPlanFile(slug) {
-  const index = getIndex();
-  const topic = index.topics[slug];
-  if (topic && topic.planFile) {
-    const abs = path.join(LEARNING_DIR, topic.planFile);
-    if (fs.existsSync(abs)) return abs;
-  }
-  // Fallback: glob for slug-*.json
-  const plansDir = path.join(LEARNING_DIR, 'plans');
-  if (!fs.existsSync(plansDir)) return null;
-  const files = fs.readdirSync(plansDir)
-    .filter(f => f.startsWith(slug + '-') && f.endsWith('.json'))
-    .sort()
-    .reverse();
-  return files.length > 0 ? path.join(plansDir, files[0]) : null;
-}
 
 // --- Stats ---
 

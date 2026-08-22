@@ -7,6 +7,12 @@
   },
   "license": "MIT",
   "keywords": ["learning", "education", "quiz", "study", "tutor"],
+  "mcpServers": {
+    "claude-tutor": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.js"]
+    }
+  },
   "hooks": {
     "PreToolUse": [
       {
