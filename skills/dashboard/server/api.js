@@ -516,18 +516,23 @@ router.get('/teach/module', (req, res) => {
   const profile = readJson(path.join(LEARNING_DIR, 'profile.json'));
   const style = profile?.learningStyle || 'hands-on';
 
+  // Labs are optional — older plans have none, so the prompt degrades to the reading-only form
+  const labs = (mod.labs || [])
+    .map(l => `- ${l.title}${l.platform ? ` (${l.platform}` + (l.setup ? `, ${l.setup}` : '') + ')' : ''}${l.url ? ` — ${l.url}` : ''}${l.verify ? ` — success: ${l.verify}` : ''}`)
+    .join('\n');
+
   const prompt = `Teach me about "${mod.title}" from a course on "${plan.topic}".
 
 Key concepts to cover: ${(mod.keyConcepts || []).join(', ')}
 Objectives: ${(mod.objectives || []).join('; ')}
 Learning style preference: ${style}
-
+${labs ? `\nHands-on labs attached to this module:\n${labs}\n` : ''}
 Structure your teaching as follows:
 1. Start with a brief connection to what I should already know
 2. Explain each key concept clearly (2-3 paragraphs each)
 3. Use analogies and concrete examples
 4. After every 2-3 concepts, include a comprehension check question
-
+${labs ? '5. End by pointing me at the lab(s) above — say what to build and how I will know it worked. Only mention a lab URL if one is listed; never invent one.\n' : ''}
 For comprehension checks, output them on their own line in this exact format:
 COMPREHENSION_CHECK: {"question":"...", "format":"mcq", "options":["A","B","C","D"], "correct":0, "concept":"...", "explanation":"..."}
 

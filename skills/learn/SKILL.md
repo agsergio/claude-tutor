@@ -177,10 +177,24 @@ Perform **3-5 web searches** with varied queries:
 4. `"[topic] [specific subtopic] guide"` — drill into focus areas
 5. `"[topic] common mistakes beginners"` — anticipate pitfalls
 
+If the topic is practical (anything you can actually build, configure, or run), add **1-3 lab-oriented searches**:
+
+6. `"[topic] hands-on lab"` / `"[topic] tutorial walkthrough"`
+7. `"containerlab [topic] topology"` — or the domain's equivalent sandbox
+8. `"[topic] free sandbox environment"`
+
+**Platform hints** — these are search seeds, NOT an authority to copy from. Use them to shape queries; never paste a platform into the output plan unless a search result actually confirms a lab exists there. A hardcoded catalog goes stale.
+
+- **Networking:** containerlab, GNS3, EVE-NG, Cisco dCloud, Cisco DevNet Sandbox
+- **GPU & AI infra:** NVIDIA LaunchPad, NVIDIA DLI, NGC containers
+- **Cloud-native:** killercoda, kind, minikube, Play with Kubernetes
+- **General dev:** devcontainers, GitHub Codespaces, Google Colab, Docker Compose
+
 For each search:
 - Use the WebSearch tool
 - Fetch the top 2-3 results with WebFetch
 - Extract: key concepts, recommended order, good resources, common learning paths
+- For lab searches, also extract: the exact lab URL, what it requires to run, and how you'd know it worked
 
 **Synthesize** the research into a coherent structure. Don't just list links — understand what the community recommends and why.
 
@@ -202,6 +216,9 @@ Create a structured plan with modules. Present it to the user in readable markdo
 
 **Key concepts:** [list]
 
+**Labs:** (omit this whole section if the module has none)
+- [lab title] — [platform], [setup], [time] — verify: [success criterion]
+
 **Resources:**
 - [resource with link and type]
 
@@ -217,6 +234,17 @@ Create a structured plan with modules. Present it to the user in readable markdo
 - Note free vs paid resources
 - Every module MUST have `keyConcepts` with at least 2 concept strings — the quiz system uses these to generate questions. A module with empty keyConcepts is broken.
 - If a diagnostic was taken, mark modules covering concepts the user already knows as "Review (optional)" instead of required
+
+**Lab rules:**
+- Aim for **at least one lab per module where the topic is practical** — this is NOT forced. Pure-theory modules (exam vocabulary, history, conceptual overviews) legitimately have no labs. Omit the `labs` field entirely rather than padding a theory module with invented exercises — filler is worse than nothing.
+- Every lab MUST have a `verify` criterion: a concrete pass/fail success check ("BGP session reaches Established", "container serves 200 on /healthz"). If you can't state how you'd know it worked, it isn't a lab — drop it.
+- Prefer `local`/`hosted` over `vendor`/`cloud` when both teach the same thing. A lower barrier means the lab actually gets done.
+- `setup` values: `local` (runs on your machine, no account — containerlab, GNS3, Docker, devcontainers, kind), `hosted` (free browser lab, account only — killercoda, DevNet Sandbox, NVIDIA DLI free tier), `vendor` (vendor-gated, may need entitlement or a waitlist — Cisco dCloud, NVIDIA LaunchPad), `cloud` (runs on your own cloud spend).
+
+**URL integrity — hard requirement, not a preference:**
+- Every `url` on a lab or resource MUST come from an actual WebSearch or WebFetch result you saw in Phase 2. **Never construct, guess, or pattern-match a URL.** A plausible-looking `dcloud.cisco.com/...` that 404s wastes the user's evening and destroys trust in the entire plan.
+- If a lab is a good idea but no verifiable URL was found, emit it with `"url": null` and describe what to build in the `title` and `verify` fields. An honest un-linked exercise beats a fabricated link.
+- Same rule for books: chapter numbers shift between editions, so prefer books whose table of contents you can actually verify with WebFetch before writing a `sections` range.
 
 Ask the user: "Does this plan look good? Want to adjust anything — add, remove, or reorder modules?"
 
@@ -251,8 +279,23 @@ The JSON format:
         {
           "title": "Resource Name",
           "url": "https://...",
-          "type": "docs|video|tutorial|book|course",
-          "free": true
+          "type": "docs|video|tutorial|book|course|lab",
+          "free": true,
+          "author": "Tanenbaum",
+          "edition": "6th",
+          "sections": "Ch. 4-6 (skip 5.3)"
+        }
+      ],
+      "labs": [
+        {
+          "title": "containerlab: sonic-vs + FRR BGP peering",
+          "platform": "containerlab",
+          "url": "https://containerlab.dev/lab-examples/...",
+          "setup": "local|hosted|vendor|cloud",
+          "cost": "free",
+          "estimatedTime": "3 hours",
+          "prerequisites": ["Docker", "8 GB RAM"],
+          "verify": "sonic-vs boots, config_db.json applied, BGP session up to FRR"
         }
       ]
     }
@@ -260,6 +303,12 @@ The JSON format:
   "totalEstimatedTime": "15 hours"
 }
 ```
+
+Optional module/resource fields — include them only when they carry real information:
+- `labs` — omit the key entirely for modules with no genuine hands-on exercise (see Lab rules above)
+- `author`, `edition`, `sections` on a resource — for `type: "book"`, so the user knows *which chapters* to read
+- `type: "lab"` on a resource — for a lab *platform* used as reference material, distinct from a specific `labs[]` exercise
+- A lab with no verifiable URL uses `"url": null` — never a guessed link
 
 3. **Update index** at `~/.claude/learning/index.json`:
    - **Read the existing file first** — do not overwrite other topics
