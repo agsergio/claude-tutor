@@ -106,57 +106,52 @@ The dashboard and CLI share the same data. Switch between them freely.
 <img src="assets/screenshot-calendar.png" alt="Review calendar view" width="720">
 </details>
 
-## Chat with your learning data (MCP server)
+### Optional: external study signal
 
-The plugin ships an [MCP](https://modelcontextprotocol.io) stdio server that exposes `~/.claude/learning/` to Claude, so you can just ask — "how am I doing on Kubernetes?", "what's due for review?", "I got 4 of 5 right on DNS, record that" — instead of opening the dashboard.
+The dashboard's recommendations are self-referential — they only know what you've
+already studied. If you have an external tool that ranks skills by some outside
+measure (job-market demand, a team skills matrix, a certification blueprint), you
+can surface that ranking as a **Market priorities** panel on the Overview.
 
-| Tool | What it does |
-|---|---|
-| `list_topics` | Every topic, with quiz count, score and last activity |
-| `get_plan` | Full learning plan: modules, objectives, key concepts, resources |
-| `get_progress` | Quiz history, weak/strong areas, spaced-repetition state |
-| `get_module_scores` | Per-module scores (`null` = not quizzed yet) |
-| `get_due_reviews` | Concepts whose review date has arrived, across all topics |
-| `get_recommendations` | What to study next, ranked |
-| `record_quiz_result` | Records a quiz, advances SM-2, recomputes weak/strong + score |
-| `update_spaced_repetition` | Advances one concept after drilling it in conversation |
-
-### Install the dependencies first
-
-Installing the plugin from GitHub does **not** run `npm install`, so this step is required once — otherwise the server exits with an install hint on startup:
+Point the `CLAUDE_TUTOR_SKILL_SIGNAL` env var at a markdown file:
 
 ```bash
-cd /path/to/claude-tutor/mcp && npm install
+CLAUDE_TUTOR_SKILL_SIGNAL=/path/to/skill-signal.md node skills/dashboard/server/index.js
 ```
 
-### Claude Code
+The file is expected to look like this — every section and every column is
+optional:
 
-Nothing else to do — the server is declared in `.claude-plugin/plugin.json` and starts with the plugin. Run `/reload-plugins` after installing the dependencies, and the tools appear.
+```markdown
+# Skill signal — 2026-08-21
 
-### Claude Desktop
+## Study next
 
-This is a **separate registration path**; the plugin manifest does not reach the desktop app. Edit (creating it if absent):
+| # | Skill | Market rank | Seen in | Stage | Gap | Next action |
+|---|---|---|---|---|---|---|
+| 1 | Service Mesh | #8 | 20 postings | studying | 0.3649 | sandbox demo lab |
+| 2 | Python | #2 | 43 postings | studying | 0.4904 | — |
 
+## Rising in the market
+
+- **Edge Compute** #15 (up 3 from #18) · stage: not-started
+
+## Already job-ready — do not re-plan
+
+Version Control, Caching / CDN, Unit Testing
 ```
-~/Library/Application Support/Claude/claude_desktop_config.json
-```
 
-```json
-{
-  "mcpServers": {
-    "claude-tutor": {
-      "command": "node",
-      "args": ["/absolute/path/to/claude-tutor/mcp/server.js"]
-    }
-  }
-}
-```
+- `—` in any cell means "no value".
+- Each row gets a **Create plan** button that deep-links to the create form
+  prefilled with the skill and its next action. Skills listed under
+  *Already job-ready* get no button.
+- **This integration is read-only.** claude-tutor parses the file and never
+  writes to it. Passing a quiz is not the same claim as being able to do
+  something on the job, so your source stays the authority on skill levels.
 
-The path must be **absolute** — `~` is not expanded. **Restart the app** after editing; config is read at launch.
-
-> `claude.ai` in the browser cannot use local stdio servers at all. This works in Claude Desktop and Claude Code only.
-
-Writes go through the same validators the `enforce-paths.js` hook applies, since that hook only sees `Write`/`Edit` tool calls and not MCP ones. An invalid payload (say `overallScore: 0.85` instead of `85`, or an invented field like `quiz_history`) is rejected before anything touches disk.
+Leave the variable unset (the default) and the panel never renders. If the file
+is missing or its format changes, the panel is hidden and a note is logged — the
+dashboard keeps working either way.
 
 ## Commands
 

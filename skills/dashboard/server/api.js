@@ -4,6 +4,7 @@ const path = require('path');
 const { validatePlan, validateProgress, updateSM2, computeWeakStrong, getModuleScores, toSlug } = require('../../../lib/validate');
 const { LEARNING_DIR, readJson, writeJson, getIndex, findPlanFile } = require('../../../lib/store');
 const { sendEvent, initSSE, streamClaude, extractJSON } = require('./sse');
+const { parseSkillSignal } = require('./skill-signal');
 
 const router = express.Router();
 
@@ -635,6 +636,38 @@ router.get('/recommendations', (req, res) => {
 
   recs.sort((a, b) => a.priority - b.priority);
   res.json(recs);
+});
+
+// --- External skill signal (optional, read-only) ---
+//
+// Surfaces a market-derived study-priority list produced by an external tool.
+// Entirely opt-in: set CLAUDE_TUTOR_SKILL_SIGNAL to the path of a
+// skill-signal.md file. Unset (the default for everyone) => empty response and
+// the dashboard panel simply never renders. This route NEVER writes anything.
+
+router.get('/skill-signal', (req, res) => {
+  const signalPath = process.env.CLAUDE_TUTOR_SKILL_SIGNAL;
+  if (!signalPath) return res.status(204).end();
+
+  let signal = null;
+  try {
+    const text = fs.readFileSync(signalPath, 'utf8');
+    signal = parseSkillSignal(text);
+    if (!signal) console.error(`[skill-signal] Could not parse ${signalPath} — panel hidden`);
+  } catch (e) {
+    console.error(`[skill-signal] Could not read ${signalPath}: ${e.message} — panel hidden`);
+    signal = null;
+  }
+
+  // A broken external feed must never take the dashboard down.
+  if (!signal) return res.status(204).end();
+
+  res.json({
+    date: signal.date,
+    studyNext: signal.studyNext,
+    rising: signal.rising,
+    jobReady: signal.jobReady,
+  });
 });
 
 // --- Module Scores ---
