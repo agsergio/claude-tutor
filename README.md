@@ -185,6 +185,8 @@ claude-tutor/
 │   ├── plugin.json         # plugin manifest
 │   └── marketplace.json    # marketplace definition
 ├── commands/               # slash command definitions
+├── lib/                    # shared data layer (store.js, validate.js)
+├── mcp/                    # MCP stdio server (server.js, handlers.js)
 ├── skills/                 # skill instructions (SKILL.md files)
 │   ├── learn/
 │   ├── quiz/
@@ -192,14 +194,17 @@ claude-tutor/
 │   ├── resources/
 │   └── dashboard/server/   # Express server + vanilla JS frontend
 ├── hooks/                  # PreToolUse + SessionStart hooks
-├── tests/                  # hook unit tests
+├── tests/                  # hook + MCP unit tests
 └── evals/                  # trigger + functional evaluations
 ```
+
+`lib/` is shared by both processes: the dashboard server and the MCP server read and write the same JSON files through `lib/store.js` and validate through `lib/validate.js`.
 
 ### Running tests
 
 ```bash
 node tests/test-hooks.js                              # hook unit tests (27 tests)
+node tests/test-mcp.js                                # MCP server tests (40 tests)
 ./evals/run-trigger-eval.sh                           # trigger evals (17 prompts)
 ./evals/run-functional-eval.sh                        # end-to-end evals (21 checks)
 node skills/dashboard/server/tests/dashboard.test.js  # dashboard tests (30 scenarios)

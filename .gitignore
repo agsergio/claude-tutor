@@ -4,3 +4,5 @@ node_modules/
 .playwright-mcp/
 skills/dashboard/server/package-lock.json
 skills/dashboard/server/node_modules/
+mcp/package-lock.json
+mcp/node_modules/

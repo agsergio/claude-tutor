@@ -28,7 +28,11 @@ The plugin has three layers that work independently:
 - `enforce-paths.js` — PreToolUse hook on Write/Edit. Blocks wrong paths, schema leakage between plan/progress files, unknown fields, and score format errors. This is the safety net for when Claude invents field names.
 - `session-start.js` — SessionStart hook. Reads spaced repetition data and prints overdue review reminders.
 
-**Dashboard** (`skills/dashboard/server/`) — Express server at localhost:3847. Reads/writes the same JSON files as the CLI. Has its own validation (`validate.js`) that mirrors the hook logic plus SM-2 algorithm implementation.
+**Dashboard** (`skills/dashboard/server/`) — Express server at localhost:3847. Reads/writes the same JSON files as the CLI.
+
+**MCP server** (`mcp/`) — stdio MCP server exposing the same data to Claude Desktop and Claude Code as tools. `server.js` wires the SDK; `handlers.js` holds the tool logic (unit-tested directly). The `enforce-paths.js` hook does NOT cover MCP writes — it matches `Write|Edit` only — so every write tool re-runs the validators itself. Never `console.log` in `mcp/`: stdout carries JSON-RPC.
+
+**Shared lib** (`lib/`) — `store.js` (data access: `LEARNING_DIR`, `readJson`, `writeJson`, `getIndex`, `findPlanFile`, `today()`) and `validate.js` (schema validation + SM-2: `updateSM2`, `computeWeakStrong`, `getModuleScores`), both required by the dashboard and the MCP server.
 
 ## Data Layout
 
@@ -58,7 +62,7 @@ When modifying a skill, check the matching command's `allowed-tools` — the ski
 
 The server (`skills/dashboard/server/`) shares data with the CLI via the same JSON files. Key modules:
 - `api.js` — REST routes (`/api/stats`, `/api/topics`, `/api/plans/:slug`, `/api/progress/:slug`, etc.)
-- `validate.js` — Schema validation + SM-2 algorithm (`updateSM2`, `computeWeakStrong`, `getModuleScores`)
+- `../../../lib/validate.js` — Schema validation + SM-2 algorithm (shared with the MCP server)
 - `sse.js` — Server-sent events for streaming Claude responses to the browser
 - `public/app.js` — Vanilla JS SPA (no framework, hash-based routing)
 
