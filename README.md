@@ -106,6 +106,58 @@ The dashboard and CLI share the same data. Switch between them freely.
 <img src="assets/screenshot-calendar.png" alt="Review calendar view" width="720">
 </details>
 
+## Chat with your learning data (MCP server)
+
+The plugin ships an [MCP](https://modelcontextprotocol.io) stdio server that exposes `~/.claude/learning/` to Claude, so you can just ask — "how am I doing on Kubernetes?", "what's due for review?", "I got 4 of 5 right on DNS, record that" — instead of opening the dashboard.
+
+| Tool | What it does |
+|---|---|
+| `list_topics` | Every topic, with quiz count, score and last activity |
+| `get_plan` | Full learning plan: modules, objectives, key concepts, resources |
+| `get_progress` | Quiz history, weak/strong areas, spaced-repetition state |
+| `get_module_scores` | Per-module scores (`null` = not quizzed yet) |
+| `get_due_reviews` | Concepts whose review date has arrived, across all topics |
+| `get_recommendations` | What to study next, ranked |
+| `record_quiz_result` | Records a quiz, advances SM-2, recomputes weak/strong + score |
+| `update_spaced_repetition` | Advances one concept after drilling it in conversation |
+
+### Install the dependencies first
+
+Installing the plugin from GitHub does **not** run `npm install`, so this step is required once — otherwise the server exits with an install hint on startup:
+
+```bash
+cd /path/to/claude-tutor/mcp && npm install
+```
+
+### Claude Code
+
+Nothing else to do — the server is declared in `.claude-plugin/plugin.json` and starts with the plugin. Run `/reload-plugins` after installing the dependencies, and the tools appear.
+
+### Claude Desktop
+
+This is a **separate registration path**; the plugin manifest does not reach the desktop app. Edit (creating it if absent):
+
+```
+~/Library/Application Support/Claude/claude_desktop_config.json
+```
+
+```json
+{
+  "mcpServers": {
+    "claude-tutor": {
+      "command": "node",
+      "args": ["/absolute/path/to/claude-tutor/mcp/server.js"]
+    }
+  }
+}
+```
+
+The path must be **absolute** — `~` is not expanded. **Restart the app** after editing; config is read at launch.
+
+> `claude.ai` in the browser cannot use local stdio servers at all. This works in Claude Desktop and Claude Code only.
+
+Writes go through the same validators the `enforce-paths.js` hook applies, since that hook only sees `Write`/`Edit` tool calls and not MCP ones. An invalid payload (say `overallScore: 0.85` instead of `85`, or an invented field like `quiz_history`) is rejected before anything touches disk.
+
 ## Commands
 
 | Command | Description | Example |
@@ -138,6 +190,8 @@ claude-tutor/
 │   ├── plugin.json         # plugin manifest
 │   └── marketplace.json    # marketplace definition
 ├── commands/               # slash command definitions
+├── lib/                    # shared data layer (store.js, validate.js)
+├── mcp/                    # MCP stdio server (server.js, handlers.js)
 ├── skills/                 # skill instructions (SKILL.md files)
 │   ├── learn/
 │   ├── quiz/
@@ -145,14 +199,17 @@ claude-tutor/
 │   ├── resources/
 │   └── dashboard/server/   # Express server + vanilla JS frontend
 ├── hooks/                  # PreToolUse + SessionStart hooks
-├── tests/                  # hook unit tests
+├── tests/                  # hook + MCP unit tests
 └── evals/                  # trigger + functional evaluations
 ```
+
+`lib/` is shared by both processes: the dashboard server and the MCP server read and write the same JSON files through `lib/store.js` and validate through `lib/validate.js`.
 
 ### Running tests
 
 ```bash
 node tests/test-hooks.js                              # hook unit tests (27 tests)
+node tests/test-mcp.js                                # MCP server tests (40 tests)
 ./evals/run-trigger-eval.sh                           # trigger evals (17 prompts)
 ./evals/run-functional-eval.sh                        # end-to-end evals (21 checks)
 node skills/dashboard/server/tests/dashboard.test.js  # dashboard tests (30 scenarios)
