@@ -4,6 +4,7 @@ const path = require('path');
 const { validatePlan, validateProgress, updateSM2, computeWeakStrong, getModuleScores, toSlug } = require('../../../lib/validate');
 const { LEARNING_DIR, readJson, writeJson, getIndex, findPlanFile } = require('../../../lib/store');
 const { sendEvent, initSSE, streamClaude, extractJSON } = require('./sse');
+const { parseSkillSignal } = require('./skill-signal');
 
 const router = express.Router();
 
@@ -515,18 +516,23 @@ router.get('/teach/module', (req, res) => {
   const profile = readJson(path.join(LEARNING_DIR, 'profile.json'));
   const style = profile?.learningStyle || 'hands-on';
 
+  // Labs are optional — older plans have none, so the prompt degrades to the reading-only form
+  const labs = (mod.labs || [])
+    .map(l => `- ${l.title}${l.platform ? ` (${l.platform}` + (l.setup ? `, ${l.setup}` : '') + ')' : ''}${l.url ? ` — ${l.url}` : ''}${l.verify ? ` — success: ${l.verify}` : ''}`)
+    .join('\n');
+
   const prompt = `Teach me about "${mod.title}" from a course on "${plan.topic}".
 
 Key concepts to cover: ${(mod.keyConcepts || []).join(', ')}
 Objectives: ${(mod.objectives || []).join('; ')}
 Learning style preference: ${style}
-
+${labs ? `\nHands-on labs attached to this module:\n${labs}\n` : ''}
 Structure your teaching as follows:
 1. Start with a brief connection to what I should already know
 2. Explain each key concept clearly (2-3 paragraphs each)
 3. Use analogies and concrete examples
 4. After every 2-3 concepts, include a comprehension check question
-
+${labs ? '5. End by pointing me at the lab(s) above — say what to build and how I will know it worked. Only mention a lab URL if one is listed; never invent one.\n' : ''}
 For comprehension checks, output them on their own line in this exact format:
 COMPREHENSION_CHECK: {"question":"...", "format":"mcq", "options":["A","B","C","D"], "correct":0, "concept":"...", "explanation":"..."}
 
@@ -635,6 +641,38 @@ router.get('/recommendations', (req, res) => {
 
   recs.sort((a, b) => a.priority - b.priority);
   res.json(recs);
+});
+
+// --- External skill signal (optional, read-only) ---
+//
+// Surfaces a market-derived study-priority list produced by an external tool.
+// Entirely opt-in: set CLAUDE_TUTOR_SKILL_SIGNAL to the path of a
+// skill-signal.md file. Unset (the default for everyone) => empty response and
+// the dashboard panel simply never renders. This route NEVER writes anything.
+
+router.get('/skill-signal', (req, res) => {
+  const signalPath = process.env.CLAUDE_TUTOR_SKILL_SIGNAL;
+  if (!signalPath) return res.status(204).end();
+
+  let signal = null;
+  try {
+    const text = fs.readFileSync(signalPath, 'utf8');
+    signal = parseSkillSignal(text);
+    if (!signal) console.error(`[skill-signal] Could not parse ${signalPath} — panel hidden`);
+  } catch (e) {
+    console.error(`[skill-signal] Could not read ${signalPath}: ${e.message} — panel hidden`);
+    signal = null;
+  }
+
+  // A broken external feed must never take the dashboard down.
+  if (!signal) return res.status(204).end();
+
+  res.json({
+    date: signal.date,
+    studyNext: signal.studyNext,
+    rising: signal.rising,
+    jobReady: signal.jobReady,
+  });
 });
 
 // --- Module Scores ---

@@ -10,7 +10,7 @@ A Claude Code plugin that turns Claude into a personal tutor with spaced repetit
 
 ```bash
 node tests/test-hooks.js                              # Hook unit tests (27 tests, instant)
-node tests/test-mcp.js                                # MCP server tests (40 tests, instant)
+node tests/test-skill-signal.js                       # Skill-signal parser tests (24 tests, instant)
 ./evals/run-trigger-eval.sh                           # Natural language trigger routing (17 prompts)
 ./evals/run-functional-eval.sh                        # End-to-end workflows (21 checks)
 node skills/dashboard/server/tests/dashboard.test.js  # Dashboard tests (30 scenarios)
