@@ -156,6 +156,31 @@ The path must be **absolute** — `~` is not expanded. **Restart the app** after
 
 > `claude.ai` in the browser cannot use local stdio servers at all. This works in Claude Desktop and Claude Code only.
 
+### Local development
+
+When developing locally (not installing from the marketplace), add the MCP server to your Claude Code settings:
+
+```bash
+cd /path/to/claude-tutor/mcp && npm install
+```
+
+Then edit `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "claude-tutor": {
+      "command": "node",
+      "args": ["/absolute/path/to/claude-tutor/mcp/server.js"]
+    }
+  }
+}
+```
+
+Run `/reload-plugins` in Claude Code. The tools appear instantly; no restart needed.
+
+---
+
 Writes go through the same validators the `enforce-paths.js` hook applies, since that hook only sees `Write`/`Edit` tool calls and not MCP ones. An invalid payload (say `overallScore: 0.85` instead of `85`, or an invented field like `quiz_history`) is rejected before anything touches disk.
 
 ## Commands
